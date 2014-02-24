@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 #include "openssl/ssl.h"
 #include "openssl/rand.h"
@@ -8,8 +9,8 @@
 #include "openssl/err.h"
 #include "openssl/x509.h"
 
-SSL *ssl;
-SSL_CTX *ctx;
+SSL*     ssl;
+SSL_CTX* ctx;
 
 void error(const char *msg)
 {
@@ -17,7 +18,7 @@ void error(const char *msg)
     exit(1);
 }
 
-SSL_CTX *setup_client_ctx()
+SSL_CTX* setup_client_ctx()
 {
     ctx = SSL_CTX_new(SSLv23_method());
     if (SSL_CTX_use_certificate_chain_file(ctx, "cert.pem") != 1) {
@@ -29,11 +30,68 @@ SSL_CTX *setup_client_ctx()
     return ctx;
 }
 
+void token2bytes(const char* token, char* bytes)
+{
+    int val;
+    while (*token) {
+        sscanf(token, "%2x", &val);
+        *(bytes++) = (char)val;
+        token += 2;
+        while (*token == ' ') { // skip space
+            ++token;
+        }
+    }
+}
+
+unsigned long packMessage(char* message,
+                          const unsigned char command,
+                          const char* tokenBytes,
+                          const char* payload)
+{
+    unsigned long payloadLength = strlen(payload);
+    unsigned short networkTokenLength = htons(32);
+
+    unsigned short networkPayloadLength = htons(payloadLength);
+
+    memcpy(message, &command, sizeof(unsigned char));
+
+    message += sizeof(unsigned char);
+
+    memcpy(message, &networkTokenLength, sizeof(unsigned short));
+
+    message += sizeof(unsigned short);
+
+    memcpy(message, tokenBytes, 32);
+
+    message += 32;
+
+    memcpy(message, &networkPayloadLength, sizeof(unsigned short));
+
+    message += sizeof(unsigned short);
+
+    memcpy(message, payload, payloadLength);
+
+    return payloadLength + 37;
+}
+
+int push(const char* token, const char* payload)
+{
+    char tokenBytes[32];
+    char message[293];
+
+    unsigned long msgLength;
+
+    token2bytes(token, tokenBytes);
+
+    msgLength = packMessage(message, 0, tokenBytes, payload);
+
+    return SSL_write(ssl, message, (int)msgLength);
+}
+
 int main (int argc, const char* argv[])
 {
-//    char token[] = "2b2474e5 ac7670f3 08fabf3a 9c1d1295 ed50e9aa f11b941a d6e3d213 4f535408";
-//    char payload[] = "{\"aps\":{\"alert\":\"Hello world!!!\",\"badge\":1}}";
-//    char payload2[] = "{\"aps\":{\"alert\":\"Hello kitty!!!\",\"badge\":12}}";
+    char token[] = "6fdb70e7 0cea3ce7 61dd8f0f 0504cb52 28b3cedb 16fa25c4 da2ac265 9c886862";
+    char payload[] = "{\"aps\":{\"alert\":\"Hello world!!!\",\"badge\":1}}";
 
     char host[] = "gateway.sandbox.push.apple.com:2195";
 
@@ -63,6 +121,9 @@ int main (int argc, const char* argv[])
     }
 
     printf("SSL Connection opened\n");
+
+    int ret = push(token, payload);
+    printf("push ret %d\n", ret);
 
     SSL_shutdown(ssl);
     SSL_free(ssl);
