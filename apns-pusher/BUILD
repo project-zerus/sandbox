@@ -1,12 +1,10 @@
 cc_binary(
-    name = 'pns-server',
+    name = 'apns-pusher',
     srcs = [
-        'pns-server.cc',
-        'apns.cc',
+        'apns-pusher.cc'
     ],
     deps = [
-        '//essence/libevhtp:libevhtp',
-        '//thirdparty/libevent:libevent'
+        '//thirdparty/openssl:openssl'
     ]
 )
 
