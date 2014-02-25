@@ -93,6 +93,8 @@ int main (int argc, const char* argv[])
     char token[] = "6fdb70e7 0cea3ce7 61dd8f0f 0504cb52 28b3cedb 16fa25c4 da2ac265 9c886862";
     char payload[] = "{\"aps\":{\"alert\":\"Hello world!!!\",\"badge\":1}}";
 
+    // http://pubs.opengroup.org/onlinepubs/009695399/functions/getaddrinfo.html
+    // use getaddrinfo() to do dns resolution
     char host[] = "gateway.sandbox.push.apple.com:2195";
 
     BIO* conn;
