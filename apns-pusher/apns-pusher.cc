@@ -50,27 +50,16 @@ unsigned long packMessage(char* message,
 {
     unsigned long payloadLength = strlen(payload);
     unsigned short networkTokenLength = htons(32);
-
     unsigned short networkPayloadLength = htons(payloadLength);
-
     memcpy(message, &command, sizeof(unsigned char));
-
     message += sizeof(unsigned char);
-
     memcpy(message, &networkTokenLength, sizeof(unsigned short));
-
     message += sizeof(unsigned short);
-
     memcpy(message, tokenBytes, 32);
-
     message += 32;
-
     memcpy(message, &networkPayloadLength, sizeof(unsigned short));
-
     message += sizeof(unsigned short);
-
     memcpy(message, payload, payloadLength);
-
     return payloadLength + 37;
 }
 

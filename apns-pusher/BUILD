@@ -10,7 +10,7 @@ cc_binary(
 
 gen_rule(
     name = 'copy-certificates',
-    cmd = 'cp $SRCS $OUTS',
+    cmd  = 'cp $SRCS $OUTS',
     srcs = ['apns.pem'],
     outs = ['cert.pem']
 )
