@@ -31,7 +31,7 @@ void test() {
   using namespace apache::thrift::protocol;
   using namespace apache::thrift::server;
   using namespace apache::thrift::transport;
-  shared_ptr<TSocket> socket(new TSocket("localhost", 9000));
+  shared_ptr<TSocket> socket(new TSocket("localhost", 20000));
   shared_ptr<TFramedTransport> transport(new TFramedTransport(socket));
   shared_ptr<TBinaryProtocol> protocol(new TBinaryProtocol(transport));
   EchoClient client(protocol);
