@@ -23,25 +23,39 @@
 
 #include "sandbox/echo/echo-thrift-api/Echo.h"
 
-void test() {
-  using boost::shared_ptr;
-  using namespace sandbox::echo::thrift;
-  using namespace apache::thrift;
-  using namespace apache::thrift::concurrency;
-  using namespace apache::thrift::protocol;
-  using namespace apache::thrift::server;
-  using namespace apache::thrift::transport;
-  shared_ptr<TSocket> socket(new TSocket("localhost", 20000));
-  shared_ptr<TFramedTransport> transport(new TFramedTransport(socket));
+using boost::shared_ptr;
+using namespace sandbox::echo::thrift;
+using namespace apache::thrift;
+using namespace apache::thrift::concurrency;
+using namespace apache::thrift::protocol;
+using namespace apache::thrift::server;
+using namespace apache::thrift::transport;
+
+void echo1(boost::shared_ptr<TFramedTransport> transport) {
   shared_ptr<TBinaryProtocol> protocol(new TBinaryProtocol(transport));
   EchoClient client(protocol);
+  std::string echoMessage;
+  client.echo(echoMessage, "hi");
+  std::cout << "echoMessage " << echoMessage << std::endl;
+}
+
+void echo2(boost::shared_ptr<TFramedTransport> transport) {
+  shared_ptr<TBinaryProtocol> protocol(new TBinaryProtocol(transport));
+  EchoClient client(protocol);
+  std::string echoMessage;
+  client.echo(echoMessage, "hi2");
+  std::cout << "echoMessage " << echoMessage << std::endl; 
+}
+
+void test() {
+  shared_ptr<TSocket> socket(new TSocket("localhost", 20000));
+  shared_ptr<TFramedTransport> transport(new TFramedTransport(socket));
   try {
     std::cout << "before transport->open()" << std::endl;
     transport->open();
     std::cout << "after transport->open()" << std::endl;
-    std::string echoMessage;
-    client.echo(echoMessage, "hi");
-    std::cout << "echoMessage " << echoMessage << std::endl;
+    echo1(transport);
+    echo2(transport);
     transport->close();
   } catch (TException &tx) {
     std::cout << "ERROR: " << tx.what() << std::endl;
