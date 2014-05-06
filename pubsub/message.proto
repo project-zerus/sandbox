@@ -1,0 +1,13 @@
+package zerus.pubsub;
+
+enum Op {
+  PUB = 0;
+  SUB = 1;
+  UNSUB = 2;
+}
+
+message PubSubMessage {
+  required Op op = 1;
+  required string topic = 2;
+  optional string content = 3;
+}
