@@ -5,10 +5,7 @@
 #include <string>
 #include <utility>
 
-#include "thirdparty/boost/bind.hpp"
-
-#include "thirdparty/glog/logging.h"
-
+#include "muduo/base/Atomic.h"
 #include "muduo/base/Logging.h"
 #include "muduo/base/Mutex.h"
 #include "muduo/base/ThreadLocalSingleton.h"
@@ -19,6 +16,10 @@
 #include "muduo/net/TcpServer.h"
 #include "muduo/net/protobuf/ProtobufCodecLite.h"
 
+#include "thirdparty/boost/bind.hpp"
+
+#include "thirdparty/glog/logging.h"
+
 #include "sandbox/pubsub/message.pb.h"
 
 namespace {
@@ -26,10 +27,12 @@ using std::map;
 using std::make_pair;
 using std::set;
 using std::string;
+using muduo::AtomicInt64;
 using muduo::MutexLock;
 using muduo::MutexLockGuard;
 using muduo::ThreadLocalSingleton;
 using muduo::Timestamp;
+using muduo::net::Buffer;
 using muduo::net::EventLoop;
 using muduo::net::InetAddress;
 using muduo::net::MessagePtr;
@@ -43,8 +46,48 @@ namespace pubsub {
 
 typedef set<string> ConnectionSubscription;
 
-class Topic : public muduo::copyable {
+class Counters : boost::noncopyable {
+public:
+  void incrementInBoundMessage() {
+    inBoundMessage.increment();
+  }
 
+  void incrementOutBoundMessage() {
+    outBoundMessage.increment();
+  }
+
+  void addInBoundTraffic(int64_t bytes) {
+    inBoundTraffic.add(bytes);
+  }
+
+  void addOutBoundTraffic(int64_t bytes) {
+    outBoundTraffic.add(bytes);
+  }
+
+  int64_t getInBoundMessage() {
+    return inBoundMessage.get();
+  }
+
+  int64_t getOutBoundMessage() {
+    return outBoundMessage.get();
+  }
+
+  int64_t getInBoundTraffic() {
+    return inBoundTraffic.get();
+  }
+
+  int64_t getOutBoundTraffic() {
+    return outBoundTraffic.get();
+  }
+
+private:
+  AtomicInt64 inBoundMessage;
+  AtomicInt64 outBoundMessage;
+  AtomicInt64 inBoundTraffic;
+  AtomicInt64 outBoundTraffic;
+};
+
+class Topic : public muduo::copyable {
 public:
   Topic(const string& topic) : topic_(topic) {}
 
@@ -56,10 +99,17 @@ public:
     audiences_.erase(conn);
   }
 
-  void publish(const string& content, ProtobufCodecLite& codec) {
+  void publish(
+    const string& content,
+    ProtobufCodecLite& codec,
+    Counters& counters) {
     PubSubMessage message = makeMessage(content);
     for (auto it = audiences_.begin(); it != audiences_.end(); ++it) {
-      codec.send(*it, message);
+      muduo::net::Buffer buf;
+      codec.fillEmptyBuffer(&buf, message);
+      counters.addOutBoundTraffic(buf.readableBytes());
+      counters.incrementOutBoundMessage();
+      (*it)->send(&buf);
     }
   }
 
@@ -91,9 +141,10 @@ class PubSubServer : boost::noncopyable {
       boost::bind(&PubSubServer::onConnection, this, _1)
     );
     server_.setMessageCallback(
-      boost::bind(&ProtobufCodecLite::onMessage, &codec_, _1, _2, _3)
+      boost::bind(&PubSubServer::onMessage, this, _1, _2, _3)
     );
     loop->runEvery(1.0f, boost::bind(&PubSubServer::timePublish, this));
+    loop->runEvery(10.0f, boost::bind(&PubSubServer::printCounters, this));
   }
 
   void start() {
@@ -121,12 +172,21 @@ class PubSubServer : boost::noncopyable {
     }
   }
 
+  void onMessage(
+    const TcpConnectionPtr& conn,
+    Buffer* buf,
+    Timestamp receiveTime) {
+    counters_.addInBoundTraffic(buf->readableBytes());
+    codec_.onMessage(conn, buf, receiveTime);
+  }
+
   void onPubSubMessage(
     const TcpConnectionPtr& connectionPtr,
     const MessagePtr& messagePtr,
     Timestamp) {
     const PubSubMessage& message 
       = *dynamic_cast<PubSubMessage*>(messagePtr.get());
+    counters_.incrementInBoundMessage();
     switch(message.op()) {
     case Op::PUB:
       distributePublish(message.topic(), message.content());
@@ -138,7 +198,8 @@ class PubSubServer : boost::noncopyable {
       doUnsubscribe(connectionPtr, message.topic());
       break;
     default:
-      // log error
+      LOG(ERROR) << "Unsupported message op: " << message.op();
+      connectionPtr->shutdown();
       break;
     }
   }
@@ -146,6 +207,33 @@ class PubSubServer : boost::noncopyable {
   void timePublish() {
     Timestamp now = Timestamp::now();
     distributePublish("utc_time", string(now.toFormattedString().data()));
+  }
+
+  void printCounters() {
+    int64_t inBoundTraffic = counters_.getInBoundTraffic();
+    int64_t inBoundMessage = counters_.getInBoundMessage();
+    int64_t outBoundTraffic = counters_.getOutBoundTraffic();
+    int64_t outBoundMessage = counters_.getOutBoundMessage();
+
+    int64_t deltaInBoundTraffic = inBoundTraffic - lastInBoundTraffic_;
+    int64_t deltaInBoundMessage = inBoundMessage - lastInBoundMessage_;
+    int64_t deltaOutBoundTraffic = outBoundTraffic - lastOutBoundTraffic_;
+    int64_t deltaOutBoundMessage = outBoundMessage - lastOutBoundMessage_;
+
+    lastInBoundTraffic_ = inBoundTraffic;
+    lastInBoundMessage_ = inBoundMessage;
+    lastOutBoundTraffic_ = outBoundTraffic;
+    lastOutBoundMessage_ = outBoundMessage;
+
+    LOG_INFO
+      << ((double)deltaInBoundTraffic) / 10.0f / 1024.0f / 1024.0f
+      << " MB/s received, "
+      << ((double)deltaInBoundMessage) / 10.0f
+      << " messages/s received, "
+      << ((double)deltaOutBoundTraffic) / 10.0f / 1024.0f / 1024.0f
+      << " MB/s sent, "
+      << ((double)deltaOutBoundMessage) / 10.0f
+      << " messages/s sent.";
   }
 
   void doSubscribe(const TcpConnectionPtr& conn, const string& topic) {
@@ -163,7 +251,7 @@ class PubSubServer : boost::noncopyable {
   }
 
   void doPublish(const string& topic, const string& content) {
-    getTopic(topic).publish(content, codec_);
+    getTopic(topic).publish(content, codec_, counters_);
   }
 
   void distributePublish(const string& topic, const string& content) {
@@ -203,6 +291,12 @@ class PubSubServer : boost::noncopyable {
 
   MutexLock mutex_;
   set<EventLoop*> loops_;
+
+  Counters counters_;
+  int64_t lastInBoundTraffic_ = 0;
+  int64_t lastInBoundMessage_ = 0;
+  int64_t lastOutBoundTraffic_ = 0;
+  int64_t lastOutBoundMessage_ = 0;
 };
 
 } // namespace pubsub
@@ -220,7 +314,6 @@ main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   google::InstallFailureSignalHandler();
   LOG(INFO) << "glog initialized";
-
   uint16_t port = static_cast<uint16_t>(FLAGS_port);
   EventLoop loop;
   zerus::pubsub::PubSubServer server(&loop, InetAddress(port));
