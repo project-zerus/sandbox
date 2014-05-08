@@ -56,7 +56,7 @@ struct Entry : public muduo::copyable {
   ~Entry() {
     muduo::net::TcpConnectionPtr conn = weakConn_.lock();
     if (conn) {
-      conn->shutdown();
+      conn->forceClose();
     }
   }
   WeakTcpConnectionPtr weakConn_;
