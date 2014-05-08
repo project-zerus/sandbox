@@ -103,13 +103,13 @@ public:
     ProtobufCodecLite& codec,
     Counters& counters) {
     PubSubMessage message = makeMessage(content);
+    muduo::net::Buffer buf;
+    codec.fillEmptyBuffer(&buf, message);
     for (auto it = audiences_.begin(); it != audiences_.end(); ++it) {
       if ((*it)->connected()) {
-        muduo::net::Buffer buf;
-        codec.fillEmptyBuffer(&buf, message);
+        (*it)->send(buf.peek(), buf.readableBytes());
         counters.addOutBoundTraffic(buf.readableBytes());
         counters.incrementOutBoundMessage();
-        (*it)->send(&buf);
       }
     }
   }
