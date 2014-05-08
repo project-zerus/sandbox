@@ -5,8 +5,11 @@
 #include <string>
 #include <utility>
 
+#include "thirdparty/boost/bind.hpp"
+
+#include "thirdparty/glog/logging.h"
+
 #include "muduo/base/Atomic.h"
-#include "muduo/base/Logging.h"
 #include "muduo/base/Mutex.h"
 #include "muduo/base/ThreadLocalSingleton.h"
 #include "muduo/base/Timestamp.h"
@@ -15,10 +18,6 @@
 #include "muduo/net/InetAddress.h"
 #include "muduo/net/TcpServer.h"
 #include "muduo/net/protobuf/ProtobufCodecLite.h"
-
-#include "thirdparty/boost/bind.hpp"
-
-#include "thirdparty/glog/logging.h"
 
 #include "sandbox/pubsub/message.pb.h"
 
@@ -225,7 +224,7 @@ class PubSubServer : boost::noncopyable {
     lastOutBoundTraffic_ = outBoundTraffic;
     lastOutBoundMessage_ = outBoundMessage;
 
-    LOG_INFO
+    LOG(INFO)
       << ((double)deltaInBoundTraffic) / 10.0f / 1024.0f / 1024.0f
       << " MB/s received, "
       << ((double)deltaInBoundMessage) / 10.0f

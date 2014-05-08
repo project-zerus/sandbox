@@ -7,7 +7,7 @@ cc_library(
   name = 'pubsub',
   extra_cppflags = '-std=c++0x',
   srcs = [
-    'pubsub.cc',
+    'PubSub.cpp',
   ],
   deps = [
     ':message_proto',
@@ -20,7 +20,7 @@ cc_binary(
   name = 'pub',
   extra_cppflags = '-std=c++0x',
   srcs = [
-    'pub.cc',
+    'Pub.cpp',
   ],
   deps = ':pubsub',
 )
@@ -29,7 +29,19 @@ cc_binary(
   name = 'sub',
   extra_cppflags = '-std=c++0x',
   srcs = [
-    'sub.cc',
+    'Sub.cpp',
+  ],
+  deps = [
+    ':pubsub',
+    '//toft/base/string:string',
+  ],
+)
+
+cc_binary(
+  name = 'stresstest',
+  extra_cppflags = '-std=c++0x',
+  srcs = [
+    'StressTest.cpp',
   ],
   deps = [
     ':pubsub',
@@ -41,7 +53,7 @@ cc_binary(
   name = 'hub',
   extra_cppflags = '-std=c++0x',
   srcs = [
-    'hub.cc',
+    'Hub.cpp',
   ],
   deps = [
     ':message_proto',

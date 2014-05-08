@@ -7,12 +7,11 @@
 
 #include "thirdparty/glog/logging.h"
 
-#include "muduo/base/Logging.h"
 #include "muduo/base/ProcessInfo.h"
 #include "muduo/net/EventLoop.h"
 #include "muduo/net/EventLoopThread.h"
 
-#include "pubsub.h"
+#include "PubSub.h"
 
 namespace {
 using namespace muduo;
@@ -27,11 +26,11 @@ std::string g_content;
 void
 onConnection(PubSubClient* client) {
   if (client->connected()) {
-    LOG_INFO << "connected";
+    LOG(INFO) << "connected";
     client->publish(g_topic, g_content);
     client->stop();
   } else {
-    LOG_INFO << "disconnected";
+    LOG(INFO) << "disconnected";
     g_loop->quit();
   }
 }

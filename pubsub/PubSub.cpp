@@ -7,7 +7,7 @@
 
 #include "sandbox/pubsub/message.pb.h"
 
-#include "pubsub.h"
+#include "PubSub.h"
 
 namespace {
 using std::string;
