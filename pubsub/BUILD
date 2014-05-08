@@ -58,5 +58,6 @@ cc_binary(
   deps = [
     ':message_proto',
     '//essence/muduo:muduo',
+    '//thirdparty/boost:thread',
   ],
 )

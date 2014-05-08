@@ -54,6 +54,12 @@ DEFINE_int32(
   "Message size."
 );
 
+DEFINE_bool(
+  pub,
+  true,
+  "Pub? Or sub?"
+);
+
 namespace {
 
 using namespace muduo;
@@ -103,10 +109,14 @@ private:
 
   void onConnection(PubSubClient* client) {
     if (client->connected()) {
-      for (auto it = topics_.begin(); it != topics_.end(); ++it) {
-        client->subscribe(
-          *it, boost::bind(&StressTest::onSubscription, this, _1, _2, _3)
-        );
+      if (!FLAGS_pub) {
+        for (auto it = topics_.begin(); it != topics_.end(); ++it) {
+          client->subscribe(
+            *it, boost::bind(&StressTest::onSubscription, this, _1, _2, _3)
+          );
+        }
+      } else {
+        sendMessages(client);
       }
     } else {
       client->stop();
@@ -114,6 +124,12 @@ private:
   }
 
   void onWriteComplete(PubSubClient* client) {
+    if (FLAGS_pub) {
+      sendMessages(client);
+    }
+  }
+
+  void sendMessages(PubSubClient* client) {
     std::string message;
     for (auto i = 0; i < FLAGS_message_size; ++i) {
       boost::random::uniform_int_distribution<> dist(0, 9);

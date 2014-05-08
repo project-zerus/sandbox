@@ -6,6 +6,10 @@
 #include <utility>
 
 #include "thirdparty/boost/bind.hpp"
+#include "thirdparty/boost/circular_buffer.hpp"
+#include "thirdparty/boost/thread/tss.hpp"
+#include "thirdparty/boost/unordered_set.hpp"
+#include "thirdparty/boost/version.hpp"
 
 #include "thirdparty/glog/logging.h"
 
@@ -38,12 +42,37 @@ using muduo::net::MessagePtr;
 using muduo::net::ProtobufCodecLite;
 using muduo::net::TcpConnectionPtr;
 using muduo::net::TcpServer;
+typedef boost::weak_ptr<muduo::net::TcpConnection> WeakTcpConnectionPtr;
 }
 
 namespace zerus {
 namespace pubsub {
 
+
+struct Entry : public muduo::copyable {
+  explicit Entry(const WeakTcpConnectionPtr& weakConn)
+    : weakConn_(weakConn) {
+  }
+  ~Entry() {
+    muduo::net::TcpConnectionPtr conn = weakConn_.lock();
+    if (conn) {
+      conn->shutdown();
+    }
+  }
+  WeakTcpConnectionPtr weakConn_;
+};
+
+typedef boost::shared_ptr<Entry> EntryPtr;
+typedef boost::weak_ptr<Entry> WeakEntryPtr;
+typedef boost::unordered_set<EntryPtr> Bucket;
+typedef boost::circular_buffer<Bucket> WeakConnectionList;
+
 typedef set<string> ConnectionSubscription;
+
+struct ConnectionContext {
+  ConnectionSubscription subscription_;
+  WeakEntryPtr weakEntry_;
+};
 
 class Counters : boost::noncopyable {
 public:
@@ -105,9 +134,10 @@ public:
     PubSubMessage message = makeMessage(content);
     muduo::net::Buffer buf;
     codec.fillEmptyBuffer(&buf, message);
-    for (auto it = audiences_.begin(); it != audiences_.end(); ++it) {
-      if ((*it)->connected()) {
-        (*it)->send(buf.peek(), buf.readableBytes());
+    for (auto audience : audiences_) {
+      TcpConnectionPtr tcpConnection = audience.lock();
+      if (tcpConnection.get()) {
+        tcpConnection->send(buf.peek(), buf.readableBytes());
         counters.addOutBoundTraffic(buf.readableBytes());
         counters.incrementOutBoundMessage();
       }
@@ -124,7 +154,7 @@ private:
   }
 
   string topic_;
-  set<TcpConnectionPtr> audiences_;
+  set<WeakTcpConnectionPtr> audiences_;
 };
 
 class PubSubServer : boost::noncopyable {
@@ -163,11 +193,18 @@ class PubSubServer : boost::noncopyable {
   void onConnection(const TcpConnectionPtr& conn) {
     if (conn->connected()) {
       connectionCount_.increment();
-      conn->setContext(ConnectionSubscription());
+      conn->setContext(ConnectionContext());
+      ConnectionContext* connectionContext
+        = boost::any_cast<ConnectionContext>(conn->getMutableContext());
+      EntryPtr entry(new Entry(conn));
+      localConnectionBuckets_.get()->back().insert(entry);
+      WeakEntryPtr weakEntry(entry);
+      connectionContext->weakEntry_ = weakEntry;
     } else {
       connectionCount_.decrement();
-      const ConnectionSubscription& connSub
-        = boost::any_cast<const ConnectionSubscription&>(conn->getContext());
+      const ConnectionContext& connectionContext
+        = boost::any_cast<const ConnectionContext&>(conn->getContext());
+      const ConnectionSubscription& connSub = connectionContext.subscription_;
       // subtle: doUnsubscribe will erase *it, so increase before calling.
       for (auto it = connSub.begin(); it != connSub.end();) {
         doUnsubscribe(conn, *it++);
@@ -179,6 +216,12 @@ class PubSubServer : boost::noncopyable {
     const TcpConnectionPtr& conn,
     Buffer* buf,
     Timestamp receiveTime) {
+    const ConnectionContext& connectionContext
+      = boost::any_cast<const ConnectionContext&>(conn->getContext());
+    EntryPtr entry(connectionContext.weakEntry_.lock());
+    if (entry) {
+      localConnectionBuckets_.get()->back().insert(entry);
+    }
     counters_.addInBoundTraffic(buf->readableBytes());
     codec_.onMessage(conn, buf, receiveTime);
   }
@@ -192,7 +235,9 @@ class PubSubServer : boost::noncopyable {
     counters_.incrementInBoundMessage();
     switch(message.op()) {
     case Op::PUB:
-      distributePublish(string(message.topic().data()), string(message.content().data()));
+      distributePublish(
+        string(message.topic().data()), string(message.content().data())
+      );
       break;
     case Op::SUB:
       doSubscribe(connectionPtr, string(message.topic().data()));
@@ -242,17 +287,17 @@ class PubSubServer : boost::noncopyable {
   }
 
   void doSubscribe(const TcpConnectionPtr& conn, const string& topic) {
-    ConnectionSubscription* connSub
-      = boost::any_cast<ConnectionSubscription>(conn->getMutableContext());
-    connSub->insert(topic);
+    ConnectionContext* connectionContext
+      = boost::any_cast<ConnectionContext>(conn->getMutableContext());
+    connectionContext->subscription_.insert(topic);
     getTopic(topic).add(conn);
   }
 
   void doUnsubscribe(const TcpConnectionPtr& conn, const string& topic) {
     getTopic(topic).remove(conn);
-    ConnectionSubscription* connSub
-      = boost::any_cast<ConnectionSubscription>(conn->getMutableContext());
-    connSub->erase(topic);
+    ConnectionContext* connectionContext
+      = boost::any_cast<ConnectionContext>(conn->getMutableContext());
+    connectionContext->subscription_.erase(topic);
   }
 
   void doPublish(const string& topic, const string& content) {
@@ -274,7 +319,7 @@ class PubSubServer : boost::noncopyable {
   }
 
   Topic& getTopic(const string& topic) {
-    map<string, Topic>& localTopics = LocalTopics::instance();
+    map<string, Topic>& localTopics = *localTopics_.get();
     auto it = localTopics.find(topic);
     if (it == localTopics.end()) {
       it = localTopics.insert(make_pair(topic, Topic(topic))).first;
@@ -282,17 +327,32 @@ class PubSubServer : boost::noncopyable {
     return it->second;
   }
 
+  void cleanUpIdleConnections() {
+    localConnectionBuckets_.get()->push_back(Bucket());
+  }
+
   void threadInit(EventLoop* loop) {
-    assert(LocalTopics::pointer() == NULL);
-    LocalTopics::instance();
-    assert(LocalTopics::pointer() != NULL);
+    assert(localTopics_.get() == NULL);
+    localTopics_.reset(new map<string, Topic>());
+    assert(localTopics_.get() != NULL);
+
+    assert(localConnectionBuckets_.get() == NULL);
+    localConnectionBuckets_.reset(new WeakConnectionList(idleSeconds_));
+    assert(localConnectionBuckets_.get() != NULL);
+
+    loop->runEvery(1.0f, boost::bind(&PubSubServer::cleanUpIdleConnections, this));
+
     MutexLockGuard lock(mutex_);
     loops_.insert(loop);
   }
 
   TcpServer server_;
   ProtobufCodecLite codec_;
-  typedef ThreadLocalSingleton<map<string, Topic>> LocalTopics;
+
+  boost::thread_specific_ptr <map<string, Topic>> localTopics_;
+
+  const uint16_t idleSeconds_ = 30;
+  boost::thread_specific_ptr <WeakConnectionList> localConnectionBuckets_;
 
   MutexLock mutex_;
   set<EventLoop*> loops_;
