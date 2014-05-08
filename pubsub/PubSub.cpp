@@ -38,6 +38,10 @@ PubSubClient::PubSubClient(
     boost::bind(&PubSubClient::onConnection, this, _1)
   );
 
+  client_.setWriteCompleteCallback(
+    boost::bind(&PubSubClient::onWriteComplete, this, _1)
+  );
+
   client_.setMessageCallback(
     boost::bind(&ProtobufCodecLite::onMessage, &codec_, _1, _2, _3)
   );
@@ -96,6 +100,13 @@ PubSubClient::onConnection(const TcpConnectionPtr& conn) {
   }
   if (connectionCallback_) {
     connectionCallback_(this);
+  }
+}
+
+void
+PubSubClient::onWriteComplete(const TcpConnectionPtr& conn) {
+  if (writeCompleteCallback_) {
+    writeCompleteCallback_(this);
   }
 }
 

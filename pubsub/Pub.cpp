@@ -50,7 +50,7 @@ DEFINE_int32(
 DEFINE_string(
   topic,
   "t1",
-  "Content to publish. Use - to read from unix standard input."
+  "Topic to publish into."
 );
 
 DEFINE_string(

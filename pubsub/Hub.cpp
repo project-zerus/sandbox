@@ -25,7 +25,7 @@ namespace {
 using std::map;
 using std::make_pair;
 using std::set;
-using std::string;
+using muduo::string;
 using muduo::AtomicInt64;
 using muduo::MutexLock;
 using muduo::MutexLockGuard;
@@ -104,11 +104,13 @@ public:
     Counters& counters) {
     PubSubMessage message = makeMessage(content);
     for (auto it = audiences_.begin(); it != audiences_.end(); ++it) {
-      muduo::net::Buffer buf;
-      codec.fillEmptyBuffer(&buf, message);
-      counters.addOutBoundTraffic(buf.readableBytes());
-      counters.incrementOutBoundMessage();
-      (*it)->send(&buf);
+      if ((*it)->connected()) {
+        muduo::net::Buffer buf;
+        codec.fillEmptyBuffer(&buf, message);
+        counters.addOutBoundTraffic(buf.readableBytes());
+        counters.incrementOutBoundMessage();
+        (*it)->send(&buf);
+      }
     }
   }
 
@@ -116,8 +118,8 @@ private:
   PubSubMessage makeMessage(const string& content) {
     PubSubMessage message;
     message.set_op(Op::PUB);
-    message.set_topic(topic_);
-    message.set_content(content);
+    message.set_topic(std::string(topic_.data()));
+    message.set_content(std::string(content.data()));
     return message;
   }
 
@@ -160,8 +162,10 @@ class PubSubServer : boost::noncopyable {
  private:
   void onConnection(const TcpConnectionPtr& conn) {
     if (conn->connected()) {
+      connectionCount_.increment();
       conn->setContext(ConnectionSubscription());
     } else {
+      connectionCount_.decrement();
       const ConnectionSubscription& connSub
         = boost::any_cast<const ConnectionSubscription&>(conn->getContext());
       // subtle: doUnsubscribe will erase *it, so increase before calling.
@@ -188,13 +192,13 @@ class PubSubServer : boost::noncopyable {
     counters_.incrementInBoundMessage();
     switch(message.op()) {
     case Op::PUB:
-      distributePublish(message.topic(), message.content());
+      distributePublish(string(message.topic().data()), string(message.content().data()));
       break;
     case Op::SUB:
-      doSubscribe(connectionPtr, message.topic());
+      doSubscribe(connectionPtr, string(message.topic().data()));
       break;
     case Op::UNSUB:
-      doUnsubscribe(connectionPtr, message.topic());
+      doUnsubscribe(connectionPtr, string(message.topic().data()));
       break;
     default:
       LOG(ERROR) << "Unsupported message op: " << message.op();
@@ -205,7 +209,7 @@ class PubSubServer : boost::noncopyable {
 
   void timePublish() {
     Timestamp now = Timestamp::now();
-    distributePublish("utc_time", string(now.toFormattedString().data()));
+    distributePublish("utc_time", now.toFormattedString().data());
   }
 
   void printCounters() {
@@ -225,6 +229,8 @@ class PubSubServer : boost::noncopyable {
     lastOutBoundMessage_ = outBoundMessage;
 
     LOG(INFO)
+      << connectionCount_.get()
+      << " connections, "
       << ((double)deltaInBoundTraffic) / 10.0f / 1024.0f / 1024.0f
       << " MB/s received, "
       << ((double)deltaInBoundMessage) / 10.0f
@@ -291,6 +297,7 @@ class PubSubServer : boost::noncopyable {
   MutexLock mutex_;
   set<EventLoop*> loops_;
 
+  AtomicInt64 connectionCount_;
   Counters counters_;
   int64_t lastInBoundTraffic_ = 0;
   int64_t lastInBoundMessage_ = 0;

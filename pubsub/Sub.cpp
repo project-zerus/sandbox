@@ -57,7 +57,7 @@ DEFINE_int32(
 DEFINE_string(
   topics,
   "t1,t2",
-  "Content to publish. Use - to read from unix standard input."
+  "Topics to subscribe."
 );
 
 int

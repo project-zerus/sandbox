@@ -10,7 +10,8 @@ namespace pubsub {
 class PubSubClient : boost::noncopyable {
  public:
   typedef boost::function<void (PubSubClient*)> ConnectionCallback;
-  
+  typedef boost::function<void (PubSubClient*)> WriteCompleteCallback;
+
   typedef boost::function<
     void (
       const std::string& topic,
@@ -33,12 +34,18 @@ class PubSubClient : boost::noncopyable {
     connectionCallback_ = cb;
   }
 
+  void setWriteCompleteCallback(const WriteCompleteCallback& cb) {
+    writeCompleteCallback_ = cb;
+  }
+
   bool subscribe(const std::string& topic, const SubscribeCallback& cb);
   void unsubscribe(const std::string& topic);
   bool publish(const std::string& topic, const std::string& content);
 
  private:
   void onConnection(const muduo::net::TcpConnectionPtr& conn);
+
+  void onWriteComplete(const muduo::net::TcpConnectionPtr& conn);
 
   void onPubSubMessage(
     const muduo::net::TcpConnectionPtr& connectionPtr,
@@ -52,6 +59,7 @@ class PubSubClient : boost::noncopyable {
   muduo::net::ProtobufCodecLite codec_;
 
   ConnectionCallback connectionCallback_;
+  WriteCompleteCallback writeCompleteCallback_;
   SubscribeCallback subscribeCallback_;
 };
 
