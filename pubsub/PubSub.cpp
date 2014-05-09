@@ -63,7 +63,8 @@ PubSubClient::connected() const {
 }
 
 bool
-PubSubClient::subscribe(const std::string& topic, const SubscribeCallback& cb) {
+PubSubClient::subscribe(
+  const std::string& topic, const SubscribeCallback& cb) {
   DLOG(INFO) << "Subscribe to topic: " << topic;
   subscribeCallback_ = cb;
   PubSubMessage message;
