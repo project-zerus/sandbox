@@ -1,8 +1,6 @@
 cc_binary(
   name = 'echo-client-cpp',
-  extra_cppflags = [
-    '-std=c++11',
-  ],
+  warning = 'no',
   srcs = [
     'main.cpp',
   ],
