@@ -3,8 +3,8 @@
 
 #include <thread>
 
-#include "thirdparty/boost/shared_ptr.hpp"
-#include "thirdparty/boost/cstdint.hpp"
+#include "boost/shared_ptr.hpp"
+#include "boost/cstdint.hpp"
 
 #include "thrift/Thrift.h"
 #include "thrift/TProcessor.h"
