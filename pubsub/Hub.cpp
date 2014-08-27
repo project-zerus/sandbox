@@ -5,13 +5,13 @@
 #include <string>
 #include <utility>
 
-#include "thirdparty/boost/bind.hpp"
-#include "thirdparty/boost/circular_buffer.hpp"
-#include "thirdparty/boost/thread/tss.hpp"
-#include "thirdparty/boost/unordered_set.hpp"
-#include "thirdparty/boost/version.hpp"
+#include "boost/bind.hpp"
+#include "boost/circular_buffer.hpp"
+#include "boost/thread/tss.hpp"
+#include "boost/unordered_set.hpp"
+#include "boost/version.hpp"
 
-#include "thirdparty/glog/logging.h"
+#include "glog/logging.h"
 
 #include "muduo/base/Atomic.h"
 #include "muduo/base/Mutex.h"

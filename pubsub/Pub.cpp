@@ -3,9 +3,9 @@
 #include <iostream>
 #include <stdio.h>
 
-#include "thirdparty/boost/bind.hpp"
+#include "boost/bind.hpp"
 
-#include "thirdparty/glog/logging.h"
+#include "glog/logging.h"
 
 #include "muduo/base/ProcessInfo.h"
 #include "muduo/net/EventLoop.h"

@@ -11,7 +11,7 @@ cc_library(
   ],
   deps = [
     ':message_proto',
-    '//essence/muduo:muduo',
+    '//muduo:muduo',
     '//thirdparty/glog:glog',
   ],
 )
@@ -57,7 +57,7 @@ cc_binary(
   ],
   deps = [
     ':message_proto',
-    '//essence/muduo:muduo',
+    '//muduo:muduo',
     '//thirdparty/boost:thread',
   ],
 )

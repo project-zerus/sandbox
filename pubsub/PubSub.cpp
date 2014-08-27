@@ -1,9 +1,9 @@
 
 #include <string>
 
-#include "thirdparty/boost/bind.hpp"
+#include "boost/bind.hpp"
 
-#include "thirdparty/glog/logging.h"
+#include "glog/logging.h"
 
 #include "sandbox/pubsub/message.pb.h"
 

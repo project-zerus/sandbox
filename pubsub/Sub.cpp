@@ -3,14 +3,14 @@
 #include <string>
 #include <vector>
 
+#include "boost/bind.hpp"
+
+#include "glog/logging.h"
+
 #include "toft/base/string/algorithm.h"
 
-#include "thirdparty/boost/bind.hpp"
-
-#include "thirdparty/glog/logging.h"
-
-#include "essence/muduo/base/ProcessInfo.h"
-#include "essence/muduo/net/EventLoop.h"
+#include "muduo/base/ProcessInfo.h"
+#include "muduo/net/EventLoop.h"
 
 #include "PubSub.h"
 
