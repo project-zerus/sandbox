@@ -1,0 +1,14 @@
+package zerus.sandbox.thrift_vs_protobuf.protobuf;
+
+message MetaData {
+  required int64 id = 1;
+  required int32 size = 2;
+  required string path = 3;
+}
+
+message Data {
+  required int64 size = 1;
+  required int32 offset = 2;
+  required bytes payload = 3;
+  required bool eof = 4;
+}
