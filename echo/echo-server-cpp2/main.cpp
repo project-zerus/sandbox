@@ -10,19 +10,22 @@
 
 #include "thrift/lib/cpp/Thrift.h"
 #include "thrift/lib/cpp/TProcessor.h"
+#include "thrift/lib/cpp/async/TEventServer.h"
 #include "thrift/lib/cpp/concurrency/PosixThreadFactory.h"
 #include "thrift/lib/cpp/concurrency/ThreadManager.h"
 #include "thrift/lib/cpp/protocol/TBinaryProtocol.h"
 #include "thrift/lib/cpp/protocol/THeaderProtocol.h"
 #include "thrift/lib/cpp/protocol/TProtocol.h"
-#include "thrift/lib/cpp/server/TNonblockingServer.h"
 #include "thrift/lib/cpp/transport/TBufferTransports.h"
 #include "thrift/lib/cpp/transport/TServerTransport.h"
 #include "thrift/lib/cpp/transport/TServerSocket.h"
+#include "thrift/lib/cpp/util/TEventServerCreator.h"
 
 #include "EchoHandler.h"
 
-using std::shared_ptr;
+using apache::thrift::async::TAsyncProcessor;
+using apache::thrift::async::TEventServer;
+using apache::thrift::util::TEventServerCreator;
 
 using namespace apache::thrift;
 using namespace apache::thrift::concurrency;
@@ -40,7 +43,6 @@ void sig_handler(int s){
 
 
 int main(int argc, char** argv) {
-
   signal(SIGINT,  sig_handler);
   signal(SIGABRT, sig_handler);
   signal(SIGQUIT, sig_handler);
@@ -49,17 +51,12 @@ int main(int argc, char** argv) {
   auto n = std::thread::hardware_concurrency();
   std::cout << "Number of cores: " << n << std::endl;
 
-  shared_ptr<EchoHandler> handler(new EchoHandler());
-  shared_ptr<TProcessor> processor(new EchoProcessor(handler));
-  shared_ptr<THeaderProtocolFactory> protocolFactory(new THeaderProtocolFactory());
+  std::shared_ptr<EchoHandler> handler(new EchoHandler());
+  std::shared_ptr<TProcessor> processor(new EchoProcessor(handler));
 
-  shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(n);
-  shared_ptr<PosixThreadFactory> threadFactory = shared_ptr<PosixThreadFactory>(new PosixThreadFactory());
-  threadManager->threadFactory(threadFactory);
-  threadManager->start();
-
-  TNonblockingServer server(processor, protocolFactory, 20000, threadManager);
-  server.serve();
+  TEventServerCreator serverCreator(processor, 20000);
+  std::shared_ptr<TEventServer> server = serverCreator.createEventServer();
+  server->serve();
 
   return 0;
 }

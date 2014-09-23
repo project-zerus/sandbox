@@ -1,5 +1,5 @@
 cc_binary(
-    name = 'echo-server-cpp',
+    name = 'echo-server-cpp2',
     warning = 'no',
     srcs = [
         'main.cpp',
