@@ -4,6 +4,6 @@ cc_test(
     'Tests.cpp',
   ],
   deps = [
-    '//thirdparty/jsoncpp:jsoncpp'
+    '//jsoncpp:jsoncpp'
   ]
 )

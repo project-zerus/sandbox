@@ -4,7 +4,7 @@ cc_binary(
         'apns-pusher.cc'
     ],
     deps = [
-        '//thirdparty/openssl:openssl'
+        '//openssl:openssl'
     ]
 )
 
